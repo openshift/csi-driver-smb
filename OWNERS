@@ -1,8 +1,3 @@
-reviewers:
-- andyzhangx
-- ZeroMagic
-
 approvers:
-- andyzhangx
-- jingxu97
-- msau42
+- openshift-storage-maintainers
+component: "Storage / Kubernetes External Components"
