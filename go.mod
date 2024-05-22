@@ -2,7 +2,7 @@ module github.com/kubernetes-csi/csi-driver-smb
 
 go 1.21
 
-toolchain go1.21.3
+toolchain go1.21.7
 
 require (
 	github.com/Azure/azure-sdk-for-go v68.0.0+incompatible
