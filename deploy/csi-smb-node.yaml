@@ -33,7 +33,7 @@ spec:
           volumeMounts:
             - mountPath: /csi
               name: socket-dir
-          image: registry.k8s.io/sig-storage/livenessprobe:v2.12.0
+          image: registry.k8s.io/sig-storage/livenessprobe:v2.11.0
           args:
             - --csi-address=/csi/csi.sock
             - --probe-timeout=3s
@@ -46,7 +46,7 @@ spec:
               cpu: 10m
               memory: 20Mi
         - name: node-driver-registrar
-          image: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.10.0
+          image: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.9.1
           args:
             - --csi-address=$(ADDRESS)
             - --kubelet-registration-path=$(DRIVER_REG_SOCK_PATH)
@@ -76,7 +76,7 @@ spec:
               cpu: 10m
               memory: 20Mi
         - name: smb
-          image: gcr.io/k8s-staging-sig-storage/smbplugin:canary
+          image: registry.k8s.io/sig-storage/smbplugin:v1.14.0
           imagePullPolicy: IfNotPresent
           args:
             - "--v=5"
