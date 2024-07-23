@@ -1,0 +1,12 @@
+FROM registry.ci.openshift.org/ocp/builder:rhel-9-golang-1.22-openshift-4.17 AS builder
+WORKDIR /go/src/github.com/openshift/csi-driver-smb
+COPY . .
+RUN make smb ARCH=$(go env GOARCH) && cp _output/$(go env GOARCH)/smbplugin .
+
+FROM registry.ci.openshift.org/ocp/4.17:base-rhel9
+COPY --from=builder /go/src/github.com/openshift/csi-driver-smb/smbplugin /bin/smbplugin
+RUN yum install -y util-linux ca-certificates cifs-utils && yum clean all && rm -rf /var/cache/yum
+
+LABEL description="SMB CSI Driver"
+
+ENTRYPOINT ["/bin/smbplugin"]
