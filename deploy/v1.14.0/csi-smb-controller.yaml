@@ -35,7 +35,7 @@ spec:
           effect: "NoSchedule"
       containers:
         - name: csi-provisioner
-          image: registry.k8s.io/sig-storage/csi-provisioner:v4.0.0
+          image: registry.k8s.io/sig-storage/csi-provisioner:v5.0.1
           args:
             - "-v=2"
             - "--csi-address=$(ADDRESS)"
@@ -55,12 +55,16 @@ spec:
             requests:
               cpu: 10m
               memory: 20Mi
+          securityContext:
+            capabilities:
+              drop:
+                - ALL
         - name: liveness-probe
-          image: registry.k8s.io/sig-storage/livenessprobe:v2.12.0
+          image: registry.k8s.io/sig-storage/livenessprobe:v2.13.1
           args:
             - --csi-address=/csi/csi.sock
             - --probe-timeout=3s
-            - --health-port=29642
+            - --http-endpoint=localhost:29642
             - --v=2
           volumeMounts:
             - name: socket-dir
@@ -72,6 +76,10 @@ spec:
             requests:
               cpu: 10m
               memory: 20Mi
+          securityContext:
+            capabilities:
+              drop:
+                - ALL
         - name: smb
           image: registry.k8s.io/sig-storage/smbplugin:v1.14.0
           imagePullPolicy: IfNotPresent
@@ -80,17 +88,15 @@ spec:
             - "--endpoint=$(CSI_ENDPOINT)"
             - "--metrics-address=0.0.0.0:29644"
           ports:
-            - containerPort: 29642
-              name: healthz
-              protocol: TCP
             - containerPort: 29644
               name: metrics
               protocol: TCP
           livenessProbe:
             failureThreshold: 5
             httpGet:
+              host: localhost
               path: /healthz
-              port: healthz
+              port: 29642
             initialDelaySeconds: 30
             timeoutSeconds: 10
             periodSeconds: 30
@@ -99,6 +105,9 @@ spec:
               value: unix:///csi/csi.sock
           securityContext:
             privileged: true
+            capabilities:
+              drop:
+                - ALL
           volumeMounts:
             - mountPath: /csi
               name: socket-dir

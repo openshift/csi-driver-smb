@@ -181,8 +181,19 @@ func (d *Driver) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequest)
 		if strings.EqualFold(smbVol.onDelete, archive) {
 			archivedInternalVolumePath := filepath.Join(getInternalMountPath(d.workingMountDir, smbVol), "archived-"+smbVol.subDir)
 
-			// archive subdirectory under base-dir
+			if strings.Contains(smbVol.subDir, "/") {
+				parentDir := filepath.Dir(archivedInternalVolumePath)
+				klog.V(2).Infof("DeleteVolume: subdirectory(%s) contains '/', make sure the parent directory(%s) exists", smbVol.subDir, parentDir)
+				if err = os.MkdirAll(parentDir, 0777); err != nil {
+					return nil, status.Errorf(codes.Internal, "create parent directory(%s) of %s failed with %v", parentDir, archivedInternalVolumePath, err.Error())
+				}
+			}
+
+			// archive subdirectory under base-dir. Remove stale archived copy if exists.
 			klog.V(2).Infof("archiving subdirectory %s --> %s", internalVolumePath, archivedInternalVolumePath)
+			if err = os.RemoveAll(archivedInternalVolumePath); err != nil {
+				return nil, status.Errorf(codes.Internal, "failed to delete archived subdirectory %s: %v", archivedInternalVolumePath, err.Error())
+			}
 			if err = os.Rename(internalVolumePath, archivedInternalVolumePath); err != nil {
 				return nil, status.Errorf(codes.Internal, "archive subdirectory(%s, %s) failed with %v", internalVolumePath, archivedInternalVolumePath, err.Error())
 			}

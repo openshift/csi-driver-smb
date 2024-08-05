@@ -15,7 +15,7 @@
 
 ```console
 helm repo add csi-driver-smb https://raw.githubusercontent.com/kubernetes-csi/csi-driver-smb/master/charts
-helm install csi-driver-smb csi-driver-smb/csi-driver-smb --namespace kube-system --version v1.14.0
+helm install csi-driver-smb csi-driver-smb/csi-driver-smb --namespace kube-system --version v1.15.0
 ```
 
 ### install driver with customized driver name, deployment name
@@ -52,14 +52,13 @@ The following table lists the configurable parameters of the latest SMB CSI Driv
 | `image.smb.repository`                                  | csi-driver-smb docker image                                                                                | `gcr.io/k8s-staging-sig-storage/smbplugin`              |
 | `image.smb.tag`                                         | csi-driver-smb docker image tag                                                                            | `canary`                                                |
 | `image.smb.pullPolicy`                                  | csi-driver-smb image pull policy                                                                           | `IfNotPresent`                                          |
-| `image.csiProvisioner.repository`                       | csi-provisioner docker image                                                                               | `registry.k8s.io/sig-storage/csi-provisioner`           |
-| `image.csiProvisioner.tag`                              | csi-provisioner docker image tag                                                                           | `v4.0.0`                                                |
+| `image.csiProvisioner.tag`                              | csi-provisioner docker image tag                                                                           | `v5.0.1`                                                |
 | `image.csiProvisioner.pullPolicy`                       | csi-provisioner image pull policy                                                                          | `IfNotPresent`                                          |
-| `image.livenessProbe.repository`                        | liveness-probe docker image                                                                                | `registry.k8s.io/sig-storage/livenessprobe`             |
-| `image.livenessProbe.tag`                               | liveness-probe docker image tag                                                                            | `v2.12.0`                                                |
+| `image.livenessProbe.repository`                        | liveness-probe docker image                                                                                | `/livenessprobe`                                        |
+| `image.livenessProbe.tag`                               | liveness-probe docker image tag                                                                            | `v2.13.1`                                                |
 | `image.livenessProbe.pullPolicy`                        | liveness-probe image pull policy                                                                           | `IfNotPresent`                                          |
-| `image.nodeDriverRegistrar.repository`                  | csi-node-driver-registrar docker image                                                                     | `registry.k8s.io/sig-storage/csi-node-driver-registrar` |
-| `image.nodeDriverRegistrar.tag`                         | csi-node-driver-registrar docker image tag                                                                 | `v2.10.0`                                                |
+| `image.nodeDriverRegistrar.repository`                  | csi-node-driver-registrar docker image                                                                     | `/csi-node-driver-registrar`                            |
+| `image.nodeDriverRegistrar.tag`                         | csi-node-driver-registrar docker image tag                                                                 | `v2.11.1`                                                |
 | `image.nodeDriverRegistrar.pullPolicy`                  | csi-node-driver-registrar image pull policy                                                                | `IfNotPresent`                                          |
 | `imagePullSecrets`                                      | Specify docker-registry secret names as an array                                                           | `[]` (does not add image pull secrets to deployed pods) |
 | `serviceAccount.create`                                 | whether create service account of csi-smb-controller                                                       | `true`                                                  |
@@ -68,7 +67,7 @@ The following table lists the configurable parameters of the latest SMB CSI Driv
 | `podAnnotations`                                        | collection of annotations to add to all the pods                                                           | `{}`                                                    |
 | `podLabels`                                             | collection of labels to add to all the pods                                                                | `{}`                                                    |
 | `priorityClassName`                                     | priority class name to be added to pods                                                                    | `system-cluster-critical`                               |
-| `securityContext`                                       | security context to be added to pods                                                                       | `{ seccompProfile: {type: RuntimeDefault} }`                                                    |
+| `securityContext`                                       | security context to be added to pods                                                                       | `{ seccompProfile: {type: RuntimeDefault} }`            |
 | `controller.name`                                       | name of driver deployment                                                                                  | `csi-smb-controller`                                    |
 | `controller.replicas`                                   | replica num of csi-smb-controller                                                                          | `1`                                                     |
 | `controller.dnsPolicy`                                  | dnsPolicy of driver node daemonset, available values: `Default`, `ClusterFirstWithHostNet`, `ClusterFirst` |    `ClusterFirstWithHostNet`                            |
