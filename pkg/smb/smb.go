@@ -68,6 +68,7 @@ type DriverOptions struct {
 	Krb5CacheDirectory            string
 	Krb5Prefix                    string
 	DefaultOnDeletePolicy         string
+	RemoveArchivedVolumePath      bool
 }
 
 // Driver implements all interfaces of CSI drivers
@@ -81,11 +82,14 @@ type Driver struct {
 	enableGetVolumeStats bool
 	// a timed cache storing volume stats <volumeID, volumeStats>
 	volStatsCache azcache.Resource
+	// a timed cache storing volume deletion records <volumeID, "">
+	volDeletionCache azcache.Resource
 	// this only applies to Windows node
 	removeSMBMappingDuringUnmount bool
 	krb5CacheDirectory            string
 	krb5Prefix                    string
 	defaultOnDeletePolicy         string
+	removeArchivedVolumePath      bool
 }
 
 // NewDriver Creates a NewCSIDriver object. Assumes vendor version is equal to driver version &
@@ -97,6 +101,7 @@ func NewDriver(options *DriverOptions) *Driver {
 	driver.NodeID = options.NodeID
 	driver.enableGetVolumeStats = options.EnableGetVolumeStats
 	driver.removeSMBMappingDuringUnmount = options.RemoveSMBMappingDuringUnmount
+	driver.removeArchivedVolumePath = options.RemoveArchivedVolumePath
 	driver.workingMountDir = options.WorkingMountDir
 	driver.volumeLocks = newVolumeLocks()
 
@@ -115,6 +120,9 @@ func NewDriver(options *DriverOptions) *Driver {
 	var err error
 	getter := func(key string) (interface{}, error) { return nil, nil }
 	if driver.volStatsCache, err = azcache.NewTimedCache(time.Duration(options.VolStatsCacheExpireInMinutes)*time.Minute, getter, false); err != nil {
+		klog.Fatalf("%v", err)
+	}
+	if driver.volDeletionCache, err = azcache.NewTimedCache(time.Minute, getter, false); err != nil {
 		klog.Fatalf("%v", err)
 	}
 	return &driver

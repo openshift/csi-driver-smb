@@ -29,7 +29,7 @@ include release-tools/build.make
 GIT_COMMIT := $(shell git rev-parse HEAD)
 REGISTRY ?= andyzhangx
 REGISTRY_NAME := $(shell echo $(REGISTRY) | sed "s/.azurecr.io//g")
-IMAGE_VERSION ?= v1.15.0
+IMAGE_VERSION ?= v1.16.0
 VERSION ?= latest
 # Use a custom version for E2E tests if we are testing in CI
 ifdef CI
@@ -146,19 +146,19 @@ container: smb
 
 .PHONY: container-linux
 container-linux:
-	docker buildx build --pull --output=type=$(OUTPUT_TYPE) --platform="linux/$(ARCH)" \
+	docker buildx build --no-cache --pull --output=type=$(OUTPUT_TYPE) --platform="linux/$(ARCH)" \
 		--provenance=false --sbom=false \
 		-t $(IMAGE_TAG)-linux-$(ARCH) --build-arg ARCH=$(ARCH) -f ./cmd/smbplugin/Dockerfile .
 
 .PHONY: container-linux-armv7
 container-linux-armv7:
-	docker buildx build --pull --output=type=$(OUTPUT_TYPE) --platform="linux/arm/v7" \
+	docker buildx build --no-cache --pull --output=type=$(OUTPUT_TYPE) --platform="linux/arm/v7" \
 		--provenance=false --sbom=false \
 		-t $(IMAGE_TAG)-linux-arm-v7 --build-arg ARCH=arm/v7 -f ./cmd/smbplugin/Dockerfile .
 
 .PHONY: container-windows
 container-windows:
-	docker buildx build --pull --output=type=$(OUTPUT_TYPE) --platform="windows/$(ARCH)" \
+	docker buildx build --no-cache --pull --output=type=$(OUTPUT_TYPE) --platform="windows/$(ARCH)" \
 		 -t $(IMAGE_TAG)-windows-$(OSVERSION)-$(ARCH) --build-arg OSVERSION=$(OSVERSION) \
 		--provenance=false --sbom=false \
 		 --build-arg ARCH=$(ARCH) -f ./cmd/smbplugin/Dockerfile.Windows .
@@ -194,6 +194,7 @@ push-manifest:
 		done; \
 	done
 	docker manifest push --purge $(IMAGE_TAG)
+	docker manifest inspect $(IMAGE_TAG)
 ifdef PUBLISH
 	docker manifest create $(IMAGE_TAG_LATEST) $(foreach osarch, $(ALL_OS_ARCH), $(IMAGE_TAG)-${osarch})
 	set -x; \
@@ -217,8 +218,8 @@ endif
 
 .PHONY: install-smb-provisioner
 install-smb-provisioner:
-	kubectl delete secret smbcreds --ignore-not-found
-	kubectl create secret generic smbcreds --from-literal username=USERNAME --from-literal password="PASSWORD" --from-literal mountOptions="dir_mode=0777,file_mode=0777,uid=0,gid=0,mfsymlinks"
+	kubectl delete secret smbcreds --ignore-not-found -n default
+	kubectl create secret generic smbcreds --from-literal username=USERNAME --from-literal password="PASSWORD" --from-literal mountOptions="dir_mode=0777,file_mode=0777,uid=0,gid=0,mfsymlinks" -n default
 ifdef TEST_WINDOWS
 	kubectl apply -f deploy/example/smb-provisioner/smb-server-lb.yaml
 else

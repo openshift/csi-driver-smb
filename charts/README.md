@@ -15,7 +15,7 @@
 
 ```console
 helm repo add csi-driver-smb https://raw.githubusercontent.com/kubernetes-csi/csi-driver-smb/master/charts
-helm install csi-driver-smb csi-driver-smb/csi-driver-smb --namespace kube-system --version v1.15.0
+helm install csi-driver-smb csi-driver-smb/csi-driver-smb --namespace kube-system --version v1.16.0
 ```
 
 ### install driver with customized driver name, deployment name
@@ -52,7 +52,7 @@ The following table lists the configurable parameters of the latest SMB CSI Driv
 | `image.smb.repository`                                  | csi-driver-smb docker image                                                                                | `gcr.io/k8s-staging-sig-storage/smbplugin`              |
 | `image.smb.tag`                                         | csi-driver-smb docker image tag                                                                            | `canary`                                                |
 | `image.smb.pullPolicy`                                  | csi-driver-smb image pull policy                                                                           | `IfNotPresent`                                          |
-| `image.csiProvisioner.tag`                              | csi-provisioner docker image tag                                                                           | `v5.0.1`                                                |
+| `image.csiProvisioner.tag`                              | csi-provisioner docker image tag                                                                           | `v5.0.2`                                                |
 | `image.csiProvisioner.pullPolicy`                       | csi-provisioner image pull policy                                                                          | `IfNotPresent`                                          |
 | `image.livenessProbe.repository`                        | liveness-probe docker image                                                                                | `/livenessprobe`                                        |
 | `image.livenessProbe.tag`                               | liveness-probe docker image tag                                                                            | `v2.13.1`                                                |

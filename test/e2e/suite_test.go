@@ -28,7 +28,6 @@ import (
 	"testing"
 
 	"github.com/kubernetes-csi/csi-driver-smb/pkg/smb"
-	"github.com/kubernetes-csi/csi-driver-smb/test/utils/testutil"
 	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/ginkgo/v2/reporters"
 	"github.com/onsi/gomega"
@@ -41,6 +40,7 @@ const (
 	kubeconfigEnvVar             = "KUBECONFIG"
 	reportDirEnv                 = "ARTIFACTS"
 	testWindowsEnvVar            = "TEST_WINDOWS"
+	testWinServerVerEnvVar       = "WINDOWS_SERVER_VERSION"
 	defaultReportDir             = "test/e2e"
 	testSmbSourceEnvVar          = "TEST_SMB_SOURCE"
 	testSmbSecretNameEnvVar      = "TEST_SMB_SECRET_NAME"
@@ -53,6 +53,7 @@ const (
 var (
 	smbDriver                     *smb.Driver
 	isWindowsCluster              = os.Getenv(testWindowsEnvVar) != ""
+	winServerVer                  = os.Getenv(testWinServerVerEnvVar)
 	defaultStorageClassParameters = map[string]string{
 		"source": getSmbTestEnvVarValue(testSmbSourceEnvVar, defaultSmbSource),
 		"csi.storage.k8s.io/provisioner-secret-name":      getSmbTestEnvVarValue(testSmbSecretNameEnvVar, defaultSmbSecretName),
@@ -118,42 +119,39 @@ var _ = ginkgo.BeforeSuite(func() {
 	framework.AfterReadingAllFlags(&framework.TestContext)
 
 	kubeconfig := os.Getenv(kubeconfigEnvVar)
+	log.Println(testWinServerVerEnvVar, os.Getenv(testWinServerVerEnvVar), fmt.Sprintf("%v", winServerVer))
+
+	// Install SMB provisioner on cluster
+	installSMBProvisioner := testCmd{
+		command:  "make",
+		args:     []string{"install-smb-provisioner"},
+		startLog: "Installing SMB provisioner...",
+		endLog:   "SMB provisioner installed",
+	}
+	// Install SMB CSI Driver on cluster from project root
+	e2eBootstrap := testCmd{
+		command:  "make",
+		args:     []string{"e2e-bootstrap"},
+		startLog: "Installing SMB CSI Driver...",
+		endLog:   "SMB CSI Driver installed",
+	}
+
+	createMetricsSVC := testCmd{
+		command:  "make",
+		args:     []string{"create-metrics-svc"},
+		startLog: "create metrics service ...",
+		endLog:   "metrics service created",
+	}
+
+	execTestCmd([]testCmd{installSMBProvisioner, e2eBootstrap, createMetricsSVC})
+
+	nodeid := os.Getenv("nodeid")
 	options := smb.DriverOptions{
-		DriverName: smb.DefaultDriverName,
+		NodeID:               nodeid,
+		DriverName:           smb.DefaultDriverName,
+		EnableGetVolumeStats: false,
 	}
 
-	if testutil.IsRunningInProw() {
-		// Install SMB provisioner on cluster
-		installSMBProvisioner := testCmd{
-			command:  "make",
-			args:     []string{"install-smb-provisioner"},
-			startLog: "Installing SMB provisioner...",
-			endLog:   "SMB provisioner installed",
-		}
-		// Install SMB CSI Driver on cluster from project root
-		e2eBootstrap := testCmd{
-			command:  "make",
-			args:     []string{"e2e-bootstrap"},
-			startLog: "Installing SMB CSI Driver...",
-			endLog:   "SMB CSI Driver installed",
-		}
-
-		createMetricsSVC := testCmd{
-			command:  "make",
-			args:     []string{"create-metrics-svc"},
-			startLog: "create metrics service ...",
-			endLog:   "metrics service created",
-		}
-
-		execTestCmd([]testCmd{installSMBProvisioner, e2eBootstrap, createMetricsSVC})
-
-		nodeid := os.Getenv("nodeid")
-		options = smb.DriverOptions{
-			NodeID:               nodeid,
-			DriverName:           smb.DefaultDriverName,
-			EnableGetVolumeStats: false,
-		}
-	}
 	smbDriver = smb.NewDriver(&options)
 	go func() {
 		smbDriver.Run(fmt.Sprintf("unix:///tmp/csi-%s.sock", uuid.NewUUID().String()), kubeconfig, false)
@@ -166,50 +164,67 @@ var _ = ginkgo.BeforeSuite(func() {
 			err := os.Chdir("test/e2e")
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 		}()
+
+		getSMBPublicIPScript := "test/utils/get_smb_svc_public_ip.sh"
+		log.Printf("run script: %s\n", getSMBPublicIPScript)
+
+		cmd := exec.Command("bash", getSMBPublicIPScript)
+		output, err := cmd.CombinedOutput()
+		log.Printf("got output: %v, error: %v\n", string(output), err)
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+
+		smbPublicIP := strings.TrimSuffix(string(output), "\n")
+		source := fmt.Sprintf("//%s/share", smbPublicIP)
+
+		log.Printf("use source on Windows: %v\n", source)
+		defaultStorageClassParameters["source"] = source
+		retainStorageClassParameters["source"] = source
+		archiveStorageClassParameters["source"] = source
+		archiveSubDirStorageClassParameters["source"] = source
+		subDirStorageClassParameters["source"] = source
+		noProvisionerSecretStorageClassParameters["source"] = source
 	}
 })
 
 var _ = ginkgo.AfterSuite(func() {
-	if testutil.IsRunningInProw() {
-		if !isWindowsCluster {
-			createExampleDeployment := testCmd{
-				command:  "bash",
-				args:     []string{"hack/verify-examples.sh"},
-				startLog: "create example deployments",
-				endLog:   "example deployments created",
-			}
-			execTestCmd([]testCmd{createExampleDeployment})
-		}
-
-		smbLog := testCmd{
+	if !isWindowsCluster {
+		createExampleDeployment := testCmd{
 			command:  "bash",
-			args:     []string{"test/utils/smb_log.sh"},
-			startLog: "===================smb log===================",
-			endLog:   "===================================================",
+			args:     []string{"hack/verify-examples.sh"},
+			startLog: "create example deployments",
+			endLog:   "example deployments created",
 		}
-		e2eTeardown := testCmd{
-			command:  "make",
-			args:     []string{"e2e-teardown"},
-			startLog: "Uninstalling SMB CSI Driver...",
-			endLog:   "SMB Driver uninstalled",
-		}
-		execTestCmd([]testCmd{smbLog, e2eTeardown})
-
-		// install/uninstall CSI Driver deployment scripts test
-		installDriver := testCmd{
-			command:  "bash",
-			args:     []string{"deploy/install-driver.sh", "master", "local"},
-			startLog: "===================install CSI Driver deployment scripts test===================",
-			endLog:   "===================================================",
-		}
-		uninstallDriver := testCmd{
-			command:  "bash",
-			args:     []string{"deploy/uninstall-driver.sh", "master", "local"},
-			startLog: "===================uninstall CSI Driver deployment scripts test===================",
-			endLog:   "===================================================",
-		}
-		execTestCmd([]testCmd{installDriver, uninstallDriver})
+		execTestCmd([]testCmd{createExampleDeployment})
 	}
+
+	smbLog := testCmd{
+		command:  "bash",
+		args:     []string{"test/utils/smb_log.sh"},
+		startLog: "===================smb log===================",
+		endLog:   "===================================================",
+	}
+	e2eTeardown := testCmd{
+		command:  "make",
+		args:     []string{"e2e-teardown"},
+		startLog: "Uninstalling SMB CSI Driver...",
+		endLog:   "SMB Driver uninstalled",
+	}
+	execTestCmd([]testCmd{smbLog, e2eTeardown})
+
+	// install/uninstall CSI Driver deployment scripts test
+	installDriver := testCmd{
+		command:  "bash",
+		args:     []string{"deploy/install-driver.sh", "master", "local"},
+		startLog: "===================install CSI Driver deployment scripts test===================",
+		endLog:   "===================================================",
+	}
+	uninstallDriver := testCmd{
+		command:  "bash",
+		args:     []string{"deploy/uninstall-driver.sh", "master", "local"},
+		startLog: "===================uninstall CSI Driver deployment scripts test===================",
+		endLog:   "===================================================",
+	}
+	execTestCmd([]testCmd{installDriver, uninstallDriver})
 })
 
 func TestE2E(t *testing.T) {

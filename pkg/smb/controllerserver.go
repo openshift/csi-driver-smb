@@ -28,6 +28,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"k8s.io/klog/v2"
+	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 )
 
 const (
@@ -98,6 +99,11 @@ func (d *Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 		}
 	}
 
+	if acquired := d.volumeLocks.TryAcquire(name); !acquired {
+		return nil, status.Errorf(codes.Aborted, volumeOperationAlreadyExistsFmt, name)
+	}
+	defer d.volumeLocks.Release(name)
+
 	if createSubDir {
 		// Mount smb base share so we can create a subdirectory
 		if err := d.internalMount(ctx, smbVol, volCap, secrets); err != nil {
@@ -147,6 +153,11 @@ func (d *Driver) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequest)
 		return &csi.DeleteVolumeResponse{}, nil
 	}
 
+	if acquired := d.volumeLocks.TryAcquire(volumeID); !acquired {
+		return nil, status.Errorf(codes.Aborted, volumeOperationAlreadyExistsFmt, volumeID)
+	}
+	defer d.volumeLocks.Release(volumeID)
+
 	var volCap *csi.VolumeCapability
 	secrets := req.GetSecrets()
 	mountOptions := getMountOptions(secrets)
@@ -167,6 +178,16 @@ func (d *Driver) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequest)
 
 	if len(req.GetSecrets()) > 0 && !strings.EqualFold(smbVol.onDelete, retain) {
 		klog.V(2).Infof("begin to delete or archive subdirectory since secret is provided")
+		// check whether volumeID is in the cache
+		cache, err := d.volDeletionCache.Get(volumeID, azcache.CacheReadTypeDefault)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, err.Error())
+		}
+		if cache != nil {
+			klog.V(2).Infof("DeleteVolume: volume %s is already deleted", volumeID)
+			return &csi.DeleteVolumeResponse{}, nil
+		}
+
 		// mount smb base share so we can delete or archive the subdirectory
 		if err = d.internalMount(ctx, smbVol, volCap, secrets); err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to mount smb server: %v", err.Error())
@@ -191,8 +212,12 @@ func (d *Driver) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequest)
 
 			// archive subdirectory under base-dir. Remove stale archived copy if exists.
 			klog.V(2).Infof("archiving subdirectory %s --> %s", internalVolumePath, archivedInternalVolumePath)
-			if err = os.RemoveAll(archivedInternalVolumePath); err != nil {
-				return nil, status.Errorf(codes.Internal, "failed to delete archived subdirectory %s: %v", archivedInternalVolumePath, err.Error())
+			if d.removeArchivedVolumePath {
+				klog.V(2).Infof("removing archived subdirectory at %v", archivedInternalVolumePath)
+				if err = os.RemoveAll(archivedInternalVolumePath); err != nil {
+					return nil, status.Errorf(codes.Internal, "failed to delete archived subdirectory %s: %v", archivedInternalVolumePath, err.Error())
+				}
+				klog.V(2).Infof("removed archived subdirectory at %v", archivedInternalVolumePath)
 			}
 			if err = os.Rename(internalVolumePath, archivedInternalVolumePath); err != nil {
 				return nil, status.Errorf(codes.Internal, "archive subdirectory(%s, %s) failed with %v", internalVolumePath, archivedInternalVolumePath, err.Error())
@@ -207,6 +232,7 @@ func (d *Driver) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequest)
 		klog.V(2).Infof("DeleteVolume(%s) does not delete subdirectory", volumeID)
 	}
 
+	d.volDeletionCache.Set(volumeID, "")
 	return &csi.DeleteVolumeResponse{}, nil
 }
 
