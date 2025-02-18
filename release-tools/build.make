@@ -45,9 +45,10 @@ REV=$(shell git describe --long --tags --match='v*' --dirty 2>/dev/null || git r
 # Determined dynamically.
 IMAGE_TAGS=
 
-# A "canary" image gets built if the current commit is the head of the remote "master" branch.
+# A "canary" image gets built if the current commit is the head of the remote "master" or "main" branch.
 # That branch does not exist when building some other branch in TravisCI.
 IMAGE_TAGS+=$(shell if [ "$$(git rev-list -n1 HEAD)" = "$$(git rev-list -n1 origin/master 2>/dev/null)" ]; then echo "canary"; fi)
+IMAGE_TAGS+=$(shell if [ "$$(git rev-list -n1 HEAD)" = "$$(git rev-list -n1 origin/main 2>/dev/null)" ]; then echo "canary"; fi)
 
 # A "X.Y.Z-canary" image gets built if the current commit is the head of a "origin/release-X.Y.Z" branch.
 # The actual suffix does not matter, only the "release-" prefix is checked.
@@ -62,9 +63,9 @@ IMAGE_NAME=$(REGISTRY_NAME)/$*
 
 ifdef V
 # Adding "-alsologtostderr" assumes that all test binaries contain glog. This is not guaranteed.
-TESTARGS = -v -args -alsologtostderr -v 5
+TESTARGS = -race -v -args -alsologtostderr -v 5
 else
-TESTARGS =
+TESTARGS = -race
 endif
 
 # Specific packages can be excluded from each of the tests below by setting the *_FILTER_CMD variables
@@ -143,7 +144,7 @@ DOCKER_BUILDX_CREATE_ARGS ?=
 # Windows binaries can be built before adding a Dockerfile for it.
 #
 # BUILD_PLATFORMS determines which individual images are included in the multiarch image.
-# PULL_BASE_REF must be set to 'master', 'release-x.y', or a tag name, and determines
+# PULL_BASE_REF must be set to 'master', 'main', 'release-x.y', or a tag name, and determines
 # the tag for the resulting multiarch image.
 $(CMDS:%=push-multiarch-%): push-multiarch-%: check-pull-base-ref build-%
 	set -ex; \
@@ -152,6 +153,7 @@ $(CMDS:%=push-multiarch-%): push-multiarch-%: check-pull-base-ref build-%
 	trap "docker buildx rm multiarchimage-buildertest" EXIT; \
 	dockerfile_linux=$$(if [ -e ./$(CMDS_DIR)/$*/Dockerfile ]; then echo ./$(CMDS_DIR)/$*/Dockerfile; else echo Dockerfile; fi); \
 	dockerfile_windows=$$(if [ -e ./$(CMDS_DIR)/$*/Dockerfile.Windows ]; then echo ./$(CMDS_DIR)/$*/Dockerfile.Windows; else echo Dockerfile.Windows; fi); \
+	dockerfile_windows_hp=$$(if [ -e ./$(CMDS_DIR)/$*/Dockerfile.WindowsHostProcess ]; then echo ./$(CMDS_DIR)/$*/Dockerfile.WindowsHostProcess; else echo Dockerfile.WindowsHostProcess; fi); \
 	if [ '$(BUILD_PLATFORMS)' ]; then build_platforms='$(BUILD_PLATFORMS)'; else build_platforms="linux amd64"; fi; \
 	if ! [ -f "$$dockerfile_windows" ]; then \
 		build_platforms="$$(echo "$$build_platforms" | sed -e 's/windows *[^ ]* *[^ ]* *.exe *[^ ]* *[^ ]*//g' -e 's/; *;/;/g' -e 's/;[ ]*$$//')"; \
@@ -190,8 +192,19 @@ $(CMDS:%=push-multiarch-%): push-multiarch-%: check-pull-base-ref build-%
 			fi; \
 		done; \
 		docker manifest push -p $(IMAGE_NAME):$$tag; \
+		if [ -f "$$dockerfile_windows_hp" ]; then \
+			docker buildx build --push \
+				--tag $(IMAGE_NAME):$$tag-amd64-windows-hp \
+				--platform=windows/amd64 \
+				--file $$dockerfile_windows_hp \
+				--build-arg binary=./bin/$*.exe \
+				--label revision=$(REV) \
+				.; \
+			docker manifest create --amend $(IMAGE_NAME):$$tag-windows-hp $(IMAGE_NAME):$$tag-amd64-windows-hp; \
+			docker manifest push -p $(IMAGE_NAME):$$tag-windows-hp; \
+		fi; \
 	}; \
-	if [ $(PULL_BASE_REF) = "master" ]; then \
+	if [ $(PULL_BASE_REF) = "master" ] || [ $(PULL_BASE_REF) = "main" ]; then \
 			: "creating or overwriting canary image"; \
 			pushMultiArch canary; \
 	elif echo $(PULL_BASE_REF) | grep -q -e 'release-*' ; then \
@@ -209,7 +222,7 @@ $(CMDS:%=push-multiarch-%): push-multiarch-%: check-pull-base-ref build-%
 .PHONY: check-pull-base-ref
 check-pull-base-ref:
 	if ! [ "$(PULL_BASE_REF)" ]; then \
-		echo >&2 "ERROR: PULL_BASE_REF must be set to 'master', 'release-x.y', or a tag name."; \
+		echo >&2 "ERROR: PULL_BASE_REF must be set to 'master', 'main', 'release-x.y', or a tag name."; \
 		exit 1; \
 	fi
 

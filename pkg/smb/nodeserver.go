@@ -28,7 +28,6 @@ import (
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 
-	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 	"k8s.io/kubernetes/pkg/volume"
 
@@ -37,12 +36,14 @@ import (
 
 	"golang.org/x/net/context"
 
+	"github.com/kubernetes-csi/csi-driver-smb/pkg/util"
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 )
 
 // NodePublishVolume mount the volume from staging to target path
-func (d *Driver) NodePublishVolume(_ context.Context, req *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {
-	if req.GetVolumeCapability() == nil {
+func (d *Driver) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {
+	volCap := req.GetVolumeCapability()
+	if volCap == nil {
 		return nil, status.Error(codes.InvalidArgument, "Volume capability missing in request")
 	}
 	volumeID := req.GetVolumeId()
@@ -53,6 +54,20 @@ func (d *Driver) NodePublishVolume(_ context.Context, req *csi.NodePublishVolume
 	target := req.GetTargetPath()
 	if len(target) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "Target path not provided")
+	}
+
+	context := req.GetVolumeContext()
+	if context != nil && strings.EqualFold(context[ephemeralField], trueValue) {
+		// ephemeral volume
+		util.SetKeyValueInMap(context, secretNamespaceField, context[podNamespaceField])
+		klog.V(2).Infof("NodePublishVolume: ephemeral volume(%s) mount on %s", volumeID, target)
+		_, err := d.NodeStageVolume(ctx, &csi.NodeStageVolumeRequest{
+			StagingTargetPath: target,
+			VolumeContext:     context,
+			VolumeCapability:  volCap,
+			VolumeId:          volumeID,
+		})
+		return &csi.NodePublishVolumeResponse{}, err
 	}
 
 	source := req.GetStagingTargetPath()
@@ -110,7 +125,7 @@ func (d *Driver) NodeUnpublishVolume(_ context.Context, req *csi.NodeUnpublishVo
 }
 
 // NodeStageVolume mount the volume to a staging path
-func (d *Driver) NodeStageVolume(_ context.Context, req *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
+func (d *Driver) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
 	volumeID := req.GetVolumeId()
 	if len(volumeID) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "Volume ID missing in request")
@@ -132,7 +147,8 @@ func (d *Driver) NodeStageVolume(_ context.Context, req *csi.NodeStageVolumeRequ
 	secrets := req.GetSecrets()
 	gidPresent := checkGidPresentInMountFlags(mountFlags)
 
-	var source, subDir string
+	var source, subDir, secretName, secretNamespace, ephemeralVolMountOptions string
+	var ephemeralVol bool
 	subDirReplaceMap := map[string]string{}
 	for k, v := range context {
 		switch strings.ToLower(k) {
@@ -146,6 +162,14 @@ func (d *Driver) NodeStageVolume(_ context.Context, req *csi.NodeStageVolumeRequ
 			subDirReplaceMap[pvcNameMetadata] = v
 		case pvNameKey:
 			subDirReplaceMap[pvNameMetadata] = v
+		case secretNameField:
+			secretName = v
+		case secretNamespaceField:
+			secretNamespace = v
+		case ephemeralField:
+			ephemeralVol = strings.EqualFold(v, trueValue)
+		case mountOptionsField:
+			ephemeralVolMountOptions = v
 		}
 	}
 
@@ -171,8 +195,20 @@ func (d *Driver) NodeStageVolume(_ context.Context, req *csi.NodeStageVolumeRequ
 		}
 	}
 
+	if ephemeralVol {
+		mountFlags = strings.Split(ephemeralVolMountOptions, ",")
+	}
+
 	// in guest login, username and password options are not needed
 	requireUsernamePwdOption := !hasGuestMountOptions(mountFlags)
+	if ephemeralVol && requireUsernamePwdOption {
+		klog.V(2).Infof("NodeStageVolume: getting username and password from secret %s in namespace %s", secretName, secretNamespace)
+		var err error
+		username, password, domain, err = d.GetUserNamePasswordFromSecret(ctx, secretName, secretNamespace)
+		if err != nil {
+			return nil, status.Error(codes.Internal, fmt.Sprintf("Error getting username and password from secret %s in namespace %s: %v", secretName, secretNamespace, err))
+		}
+	}
 
 	var mountOptions, sensitiveMountOptions []string
 	if runtime.GOOS == "windows" {
@@ -232,16 +268,11 @@ func (d *Driver) NodeStageVolume(_ context.Context, req *csi.NodeStageVolumeRequ
 			source = strings.TrimRight(source, "/")
 			source = fmt.Sprintf("%s/%s", source, subDir)
 		}
-		mountComplete := false
-		err = wait.PollImmediate(1*time.Second, 2*time.Minute, func() (bool, error) {
-			err := Mount(d.mounter, source, targetPath, "cifs", mountOptions, sensitiveMountOptions, volumeID)
-			mountComplete = true
-			return true, err
-		})
-		if !mountComplete {
-			return nil, status.Error(codes.Internal, fmt.Sprintf("volume(%s) mount %q on %q failed with timeout(10m)", volumeID, source, targetPath))
+		execFunc := func() error {
+			return Mount(d.mounter, source, targetPath, "cifs", mountOptions, sensitiveMountOptions, volumeID)
 		}
-		if err != nil {
+		timeoutFunc := func() error { return fmt.Errorf("time out") }
+		if err := util.WaitUntilTimeout(90*time.Second, execFunc, timeoutFunc); err != nil {
 			return nil, status.Error(codes.Internal, fmt.Sprintf("volume(%s) mount %q on %q failed with %v", volumeID, source, targetPath, err))
 		}
 		klog.V(2).Infof("volume(%s) mount %q on %q succeeded", volumeID, source, targetPath)
@@ -306,12 +337,12 @@ func (d *Driver) NodeGetVolumeStats(_ context.Context, req *csi.NodeGetVolumeSta
 	// check if the volume stats is cached
 	cache, err := d.volStatsCache.Get(req.VolumeId, azcache.CacheReadTypeDefault)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, err.Error())
+		return nil, status.Errorf(codes.Internal, "%v", err)
 	}
 	if cache != nil {
-		resp := cache.(csi.NodeGetVolumeStatsResponse)
+		resp := cache.(*csi.NodeGetVolumeStatsResponse)
 		klog.V(6).Infof("NodeGetVolumeStats: volume stats for volume %s path %s is cached", req.VolumeId, req.VolumePath)
-		return &resp, nil
+		return resp, nil
 	}
 
 	if _, err := os.Lstat(req.VolumePath); err != nil {
@@ -370,7 +401,7 @@ func (d *Driver) NodeGetVolumeStats(_ context.Context, req *csi.NodeGetVolumeSta
 	}
 
 	// cache the volume stats per volume
-	d.volStatsCache.Set(req.VolumeId, resp)
+	d.volStatsCache.Set(req.VolumeId, &resp)
 	return &resp, err
 }
 

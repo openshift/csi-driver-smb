@@ -49,7 +49,13 @@ var (
 	krb5Prefix                    = flag.String("krb5-prefix", smb.DefaultKrb5CCName, "The prefix for kerberos cache")
 	defaultOnDeletePolicy         = flag.String("default-ondelete-policy", "", "default policy for deleting subdirectory when deleting a volume")
 	removeArchivedVolumePath      = flag.Bool("remove-archived-volume-path", true, "remove archived volume path in DeleteVolume")
+	enableWindowsHostProcess      = flag.Bool("enable-windows-host-process", false, "enable windows host process")
 )
+
+// exit is a separate function to handle program termination
+var exit = func(code int) {
+	os.Exit(code)
+}
 
 func main() {
 	flag.Parse()
@@ -59,15 +65,15 @@ func main() {
 			klog.Fatalln(err)
 		}
 		fmt.Println(info) // nolint
-		os.Exit(0)
+	} else {
+		if *nodeID == "" {
+			// nodeid is not needed in controller component
+			klog.Warning("nodeid is empty")
+		}
+		exportMetrics()
+		handle()
 	}
-	if *nodeID == "" {
-		// nodeid is not needed in controller component
-		klog.Warning("nodeid is empty")
-	}
-	exportMetrics()
-	handle()
-	os.Exit(0)
+	exit(0)
 }
 
 func handle() {
@@ -82,6 +88,7 @@ func handle() {
 		Krb5CacheDirectory:            *krb5CacheDirectory,
 		Krb5Prefix:                    *krb5Prefix,
 		DefaultOnDeletePolicy:         *defaultOnDeletePolicy,
+		EnableWindowsHostProcess:      *enableWindowsHostProcess,
 	}
 	driver := smb.NewDriver(&driverOptions)
 	driver.Run(*endpoint, *kubeconfig, false)

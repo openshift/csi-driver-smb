@@ -6,6 +6,7 @@
 ## Feature Status: GA
 
 ## Prerequisite
+ > if you have set `windows.useHostProcessContainers` as `true`, csi-proxy is not needed by CSI driver.
 - [Install CSI-Proxy on Windows Node](https://github.com/kubernetes-csi/csi-proxy#installation)
 - install csi-proxy on k8s 1.23+ Windows node using host process daemonset directly
 ```console
@@ -39,6 +40,7 @@ kind: StorageClass
 metadata:
   name: smb
 provisioner: smb.csi.k8s.io
+allowVolumeExpansion: true
 parameters:
   source: //smb-server.default.svc.cluster.local/share
 ...
@@ -81,6 +83,7 @@ kind: StorageClass
 metadata:
   name: smb
 provisioner: smb.csi.k8s.io
+allowVolumeExpansion: true
 parameters:
   source: //10.111.254.254/share
 ...

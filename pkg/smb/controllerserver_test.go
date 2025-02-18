@@ -74,7 +74,7 @@ func TestCreateVolume(t *testing.T) {
 	// Setup mounter
 	mounter, err := NewFakeMounter()
 	if err != nil {
-		t.Fatalf(fmt.Sprintf("failed to get fake mounter: %v", err))
+		t.Fatalf("failed to get fake mounter: %v", err)
 	}
 	d.mounter = mounter
 
@@ -234,7 +234,7 @@ func TestDeleteVolume(t *testing.T) {
 	// Setup mounter
 	mounter, err := NewFakeMounter()
 	if err != nil {
-		t.Fatalf(fmt.Sprintf("failed to get fake mounter: %v", err))
+		t.Fatalf("failed to get fake mounter: %v", err)
 	}
 	d.mounter = mounter
 
@@ -317,22 +317,22 @@ func TestValidateVolumeCapabilities(t *testing.T) {
 
 	tests := []struct {
 		desc        string
-		req         csi.ValidateVolumeCapabilitiesRequest
+		req         *csi.ValidateVolumeCapabilitiesRequest
 		expectedErr error
 	}{
 		{
 			desc:        "Volume ID missing",
-			req:         csi.ValidateVolumeCapabilitiesRequest{},
+			req:         &csi.ValidateVolumeCapabilitiesRequest{},
 			expectedErr: status.Error(codes.InvalidArgument, "Volume ID missing in request"),
 		},
 		{
 			desc:        "Volume capabilities missing",
-			req:         csi.ValidateVolumeCapabilitiesRequest{VolumeId: "vol_1"},
+			req:         &csi.ValidateVolumeCapabilitiesRequest{VolumeId: "vol_1"},
 			expectedErr: status.Error(codes.InvalidArgument, "volume capabilities missing in request"),
 		},
 		{
 			desc: "block volume capability not supported",
-			req: csi.ValidateVolumeCapabilitiesRequest{
+			req: &csi.ValidateVolumeCapabilitiesRequest{
 				VolumeId:           "vol_1",
 				VolumeCapabilities: blockVolCap,
 			},
@@ -340,7 +340,7 @@ func TestValidateVolumeCapabilities(t *testing.T) {
 		},
 		{
 			desc: "Valid request",
-			req: csi.ValidateVolumeCapabilitiesRequest{
+			req: &csi.ValidateVolumeCapabilitiesRequest{
 				VolumeId:           "vol_1#f5713de20cde511e8ba4900#fileshare#diskname#",
 				VolumeCapabilities: mountVolCap,
 			},
@@ -349,7 +349,7 @@ func TestValidateVolumeCapabilities(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		_, err := d.ValidateVolumeCapabilities(context.Background(), &test.req)
+		_, err := d.ValidateVolumeCapabilities(context.Background(), test.req)
 		if !reflect.DeepEqual(err, test.expectedErr) {
 			t.Errorf("[test: %s] Unexpected error: %v, expected error: %v", test.desc, err, test.expectedErr)
 		}
@@ -398,11 +398,54 @@ func TestListVolumes(t *testing.T) {
 
 func TestControllerExpandVolume(t *testing.T) {
 	d := NewFakeDriver()
-	req := csi.ControllerExpandVolumeRequest{}
-	resp, err := d.ControllerExpandVolume(context.Background(), &req)
-	assert.Nil(t, resp)
-	if !reflect.DeepEqual(err, status.Error(codes.Unimplemented, "")) {
-		t.Errorf("Unexpected error: %v", err)
+
+	testCases := []struct {
+		name     string
+		testFunc func(t *testing.T)
+	}{
+		{
+			name: "volume ID missing",
+			testFunc: func(t *testing.T) {
+				req := &csi.ControllerExpandVolumeRequest{}
+				_, err := d.ControllerExpandVolume(context.Background(), req)
+				expectedErr := status.Error(codes.InvalidArgument, "Volume ID missing in request")
+				if !reflect.DeepEqual(err, expectedErr) {
+					t.Errorf("actualErr: (%v), expectedErr: (%v)", err, expectedErr)
+				}
+			},
+		},
+		{
+			name: "Capacity Range missing",
+			testFunc: func(t *testing.T) {
+				req := &csi.ControllerExpandVolumeRequest{
+					VolumeId: "unit-test",
+				}
+				_, err := d.ControllerExpandVolume(context.Background(), req)
+				expectedErr := status.Error(codes.InvalidArgument, "Capacity Range missing in request")
+				if !reflect.DeepEqual(err, expectedErr) {
+					t.Errorf("actualErr: (%v), expectedErr: (%v)", err, expectedErr)
+				}
+			},
+		},
+		{
+			name: "Error = nil",
+			testFunc: func(t *testing.T) {
+				req := &csi.ControllerExpandVolumeRequest{
+					VolumeId: "unit-test",
+					CapacityRange: &csi.CapacityRange{
+						RequiredBytes: 10000,
+					},
+				}
+				_, err := d.ControllerExpandVolume(context.Background(), req)
+				if !reflect.DeepEqual(err, nil) {
+					t.Errorf("actualErr: (%v), expectedErr: (%v)", err, nil)
+				}
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, tc.testFunc)
 	}
 }
 
@@ -762,7 +805,7 @@ func TestCopyFromVolume(t *testing.T) {
 	// Setup mounter
 	mounter, err := NewFakeMounter()
 	if err != nil {
-		t.Fatalf(fmt.Sprintf("failed to get fake mounter: %v", err))
+		t.Fatalf("failed to get fake mounter: %v", err)
 	}
 	d.mounter = mounter
 

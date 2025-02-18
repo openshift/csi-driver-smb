@@ -8,14 +8,13 @@
 
 - run smb-controller on control plane node: `--set controller.runOnControlPlane=true`
 - Microk8s based kubernetes recommended settings:
-    - `--set linux.kubelet="/var/snap/microk8s/common/var/lib/kubelet"` - sets correct path to microk8s kubelet even
-      though a user has a folder link to it.
+    - `--set linux.kubelet="/var/snap/microk8s/common/var/lib/kubelet"` - sets correct path to microk8s kubelet even though a user has a folder link to it.
 
 ### install a specific version
 
 ```console
 helm repo add csi-driver-smb https://raw.githubusercontent.com/kubernetes-csi/csi-driver-smb/master/charts
-helm install csi-driver-smb csi-driver-smb/csi-driver-smb --namespace kube-system --version v1.16.0
+helm install csi-driver-smb csi-driver-smb/csi-driver-smb --namespace kube-system --version v1.17.0
 ```
 
 ### install driver with customized driver name, deployment name
@@ -52,13 +51,13 @@ The following table lists the configurable parameters of the latest SMB CSI Driv
 | `image.smb.repository`                                  | csi-driver-smb docker image                                                                                | `gcr.io/k8s-staging-sig-storage/smbplugin`              |
 | `image.smb.tag`                                         | csi-driver-smb docker image tag                                                                            | `canary`                                                |
 | `image.smb.pullPolicy`                                  | csi-driver-smb image pull policy                                                                           | `IfNotPresent`                                          |
-| `image.csiProvisioner.tag`                              | csi-provisioner docker image tag                                                                           | `v5.0.2`                                                |
+| `image.csiProvisioner.tag`                              | csi-provisioner docker image tag                                                                           | `v5.2.0`                                                |
 | `image.csiProvisioner.pullPolicy`                       | csi-provisioner image pull policy                                                                          | `IfNotPresent`                                          |
 | `image.livenessProbe.repository`                        | liveness-probe docker image                                                                                | `/livenessprobe`                                        |
-| `image.livenessProbe.tag`                               | liveness-probe docker image tag                                                                            | `v2.13.1`                                                |
+| `image.livenessProbe.tag`                               | liveness-probe docker image tag                                                                            | `v2.15.0`                                                |
 | `image.livenessProbe.pullPolicy`                        | liveness-probe image pull policy                                                                           | `IfNotPresent`                                          |
 | `image.nodeDriverRegistrar.repository`                  | csi-node-driver-registrar docker image                                                                     | `/csi-node-driver-registrar`                            |
-| `image.nodeDriverRegistrar.tag`                         | csi-node-driver-registrar docker image tag                                                                 | `v2.11.1`                                                |
+| `image.nodeDriverRegistrar.tag`                         | csi-node-driver-registrar docker image tag                                                                 | `v2.13.0`                                                |
 | `image.nodeDriverRegistrar.pullPolicy`                  | csi-node-driver-registrar image pull policy                                                                | `IfNotPresent`                                          |
 | `imagePullSecrets`                                      | Specify docker-registry secret names as an array                                                           | `[]` (does not add image pull secrets to deployed pods) |
 | `serviceAccount.create`                                 | whether create service account of csi-smb-controller                                                       | `true`                                                  |
@@ -77,7 +76,7 @@ The following table lists the configurable parameters of the latest SMB CSI Driv
 | `controller.workingMountDir`                            | working directory for provisioner to mount smb shares temporarily                                          | `/tmp`                                                  |
 | `controller.runOnMaster`                                | run controller on master node                                                                              | `false`                                                 |
 | `controller.runOnControlPlane`                          | run controller on control plane node                                                                       | `false`                                                 |
-| `controller.resources.csiProvisioner.limits.memory`     | csi-provisioner memory limits                                                                              | `100Mi`                                                 |
+| `controller.resources.csiProvisioner.limits.memory`     | csi-provisioner memory limits                                                                              | `400Mi`                                                 |
 | `controller.resources.csiProvisioner.requests.cpu`      | csi-provisioner cpu requests limits                                                                        | `10m`                                                   |
 | `controller.resources.csiProvisioner.requests.memory`   | csi-provisioner memory requests limits                                                                     | `20Mi`                                                  |
 | `controller.resources.livenessProbe.limits.memory`      | liveness-probe memory limits                                                                               | `300Mi`                                                 |
@@ -86,7 +85,7 @@ The following table lists the configurable parameters of the latest SMB CSI Driv
 | `controller.resources.smb.limits.memory`                | smb-csi-driver memory limits                                                                               | `200Mi`                                                 |
 | `controller.resources.smb.requests.cpu`                 | smb-csi-driver cpu requests limits                                                                         | `10m`                                                   |
 | `controller.resources.smb.requests.memory`              | smb-csi-driver memory requests limits                                                                      | `20Mi`                                                  |
-| `controller.resources.csiResizer.limits.memory`         | csi-resizer memory limits                                                                                  | `300Mi`                                                 |
+| `controller.resources.csiResizer.limits.memory`         | csi-resizer memory limits                                                                                  | `400Mi`                                                 |
 | `controller.resources.csiResizer.requests.cpu`          | csi-resizer cpu requests limits                                                                            | `10m`                                                   |
 | `controller.resources.csiResizer.requests.memory`       | csi-resizer memory requests limits                                                                         | `20Mi`                                                  |
 | `controller.affinity`                                   | controller pod affinity                                                                                    | `{}`                                                    |
@@ -112,7 +111,8 @@ The following table lists the configurable parameters of the latest SMB CSI Driv
 | `linux.resources.smb.limits.memory`                     | smb-csi-driver memory limits                                                                               | `200Mi`                                                 |
 | `linux.resources.smb.requests.cpu`                      | smb-csi-driver cpu requests limits                                                                         | `10m`                                                   |
 | `linux.resources.smb.requests.memory`                   | smb-csi-driver memory requests limits                                                                      | `20Mi`                                                  |
-| `windows.enabled`                                       | whether enable windows feature                                                                             | `false`                                                 |
+| `windows.enabled`                                       | whether enable windows feature                                                                             | `true`                                                 |
+| `windows.useHostProcessContainers`                | whether deploy driver daemonset with HostProcess containers on windows | `true`                                                             |
 | `windows.dsName`                                        | name of driver daemonset on windows                                                                        | `csi-smb-node-win`                                      |
 | `windows.removeSMBMappingDuringUnmount`                 | remove SMBMapping during unmount on Windows node windows                                                   | `true`                                                  |
 | `windows.resources.livenessProbe.limits.memory`         | liveness-probe memory limits                                                                               | `200Mi`                                                 |
@@ -127,6 +127,7 @@ The following table lists the configurable parameters of the latest SMB CSI Driv
 | `windows.kubelet`                                       | configure kubelet directory path on Windows agent node                                                     | `'C:\var\lib\kubelet'`                                  |
 
 ### Csi Proxy support on windows
+ > if you have set `windows.useHostProcessContainers` as `true`, csi-proxy is not needed by CSI driver.
 
 The helm can setup the host-process deamonset for the csi proxy, by setting windows.csiproxy.enabled to true.
 
