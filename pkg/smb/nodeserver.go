@@ -109,6 +109,13 @@ func (d *Driver) NodeUnpublishVolume(_ context.Context, req *csi.NodeUnpublishVo
 	return &csi.NodeUnpublishVolumeResponse{}, nil
 }
 
+// Returns true if the `word` contains a special character, i.e it can confuse mount command-line if passed as is:
+// mount -t cifs -o username=something,password=word,...
+// For now, only three such characters are known: "`,
+func ContainsSpecialCharacter(word string) bool {
+	return strings.Contains(word, "\"") || strings.Contains(word, "`") || strings.Contains(word, ",")
+}
+
 // NodeStageVolume mount the volume to a staging path
 func (d *Driver) NodeStageVolume(_ context.Context, req *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
 	volumeID := req.GetVolumeId()
@@ -195,7 +202,11 @@ func (d *Driver) NodeStageVolume(_ context.Context, req *csi.NodeStageVolumeRequ
 			return nil, status.Error(codes.Internal, fmt.Sprintf("MkdirAll %s failed with error: %v", targetPath, err))
 		}
 		if requireUsernamePwdOption && !useKerberosCache {
-			sensitiveMountOptions = []string{fmt.Sprintf("%s=%s,%s=%s", usernameField, username, passwordField, password)}
+			if ContainsSpecialCharacter(password) {
+				sensitiveMountOptions = []string{fmt.Sprintf("%s=%s", usernameField, username), fmt.Sprintf("%s=%s", passwordField, password)}
+			} else {
+				sensitiveMountOptions = []string{fmt.Sprintf("%s=%s,%s=%s", usernameField, username, passwordField, password)}
+			}
 		}
 		mountOptions = mountFlags
 		if !gidPresent && volumeMountGroup != "" {
