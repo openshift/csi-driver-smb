@@ -1,6 +1,6 @@
 module github.com/kubernetes-csi/csi-driver-smb
 
-go 1.22
+go 1.22.0
 
 toolchain go1.22.1
 
