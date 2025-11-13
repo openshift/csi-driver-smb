@@ -11,10 +11,12 @@
     - `--set linux.kubelet="/var/snap/microk8s/common/var/lib/kubelet"` - sets correct path to microk8s kubelet even though a user has a folder link to it.
 
 ### install a specific version
+> [!IMPORTANT]  
+> Starting from version `1.18.0`, the prefix `v` is removed from hlem chart release so they are in line with [semver](https://semver.org). Therefore, when upgrading, refer to version `1.18.0` instead of `v1.18.0`.
 
 ```console
 helm repo add csi-driver-smb https://raw.githubusercontent.com/kubernetes-csi/csi-driver-smb/master/charts
-helm install csi-driver-smb csi-driver-smb/csi-driver-smb --namespace kube-system --version v1.18.0
+helm install csi-driver-smb csi-driver-smb/csi-driver-smb --namespace kube-system --version v1.19.1
 ```
 
 ### install driver with customized driver name, deployment name
@@ -51,13 +53,13 @@ The following table lists the configurable parameters of the latest SMB CSI Driv
 | `image.smb.repository`                                  | csi-driver-smb docker image                                                                                | `gcr.io/k8s-staging-sig-storage/smbplugin`              |
 | `image.smb.tag`                                         | csi-driver-smb docker image tag                                                                            | `canary`                                                |
 | `image.smb.pullPolicy`                                  | csi-driver-smb image pull policy                                                                           | `IfNotPresent`                                          |
-| `image.csiProvisioner.tag`                              | csi-provisioner docker image tag                                                                           | `v5.2.0`                                                |
+| `image.csiProvisioner.tag`                              | csi-provisioner docker image tag                                                                           | `v5.3.0`                                                |
 | `image.csiProvisioner.pullPolicy`                       | csi-provisioner image pull policy                                                                          | `IfNotPresent`                                          |
 | `image.livenessProbe.repository`                        | liveness-probe docker image                                                                                | `/livenessprobe`                                        |
-| `image.livenessProbe.tag`                               | liveness-probe docker image tag                                                                            | `v2.15.0`                                                |
+| `image.livenessProbe.tag`                               | liveness-probe docker image tag                                                                            | `v2.17.0`                                                |
 | `image.livenessProbe.pullPolicy`                        | liveness-probe image pull policy                                                                           | `IfNotPresent`                                          |
 | `image.nodeDriverRegistrar.repository`                  | csi-node-driver-registrar docker image                                                                     | `/csi-node-driver-registrar`                            |
-| `image.nodeDriverRegistrar.tag`                         | csi-node-driver-registrar docker image tag                                                                 | `v2.13.0`                                                |
+| `image.nodeDriverRegistrar.tag`                         | csi-node-driver-registrar docker image tag                                                                 | `v2.15.0`                                                |
 | `image.nodeDriverRegistrar.pullPolicy`                  | csi-node-driver-registrar image pull policy                                                                | `IfNotPresent`                                          |
 | `imagePullSecrets`                                      | Specify docker-registry secret names as an array                                                           | `[]` (does not add image pull secrets to deployed pods) |
 | `serviceAccount.create`                                 | whether create service account of csi-smb-controller                                                       | `true`                                                  |
@@ -125,6 +127,7 @@ The following table lists the configurable parameters of the latest SMB CSI Driv
 | `windows.resources.smb.requests.cpu`                    | smb-csi-driver cpu requests limits                                                                         | `10m`                                                   |
 | `windows.resources.smb.requests.memory`                 | smb-csi-driver memory requests limits                                                                      | `20Mi`                                                  |
 | `windows.kubelet`                                       | configure kubelet directory path on Windows agent node                                                     | `'C:\var\lib\kubelet'`                                  |
+| `storageClasses` | create multiple storage classes | `[]` |  |
 
 ### Csi Proxy support on windows
  > if you have set `windows.useHostProcessContainers` as `true`, csi-proxy is not needed by CSI driver.
@@ -144,6 +147,59 @@ The following table lists the configurable parameters of the latest CSI-proxy Dr
 | `image.csiproxy.repository`                             | csiproxy docker image                                                                                      | `ghcr.io/kubernetes-sigs/sig-windows/csi-proxy`         |
 | `image.csiproxy.tag`                                    | csiproxy docker image tag                                                                                  | `v1.1.2`                                                |
 | `image.csiproxy.pullPolicy`                             | csiproxy image pull policy                                                                                 | `IfNotPresent`                                          |
+
+## Create multiple storage classes
+
+ - create multiple storage classes with different configurations using the `storageClasses` parameter:
+
+```yaml
+storageClasses:
+  - name: smb-csi
+    annotations:
+      storageclass.kubernetes.io/is-default-class: "true"
+    parameters:
+      source: "//smb-server.default.svc.cluster.local/share"
+      # if csi.storage.k8s.io/provisioner-secret is provided, will create a sub directory
+      # with PV name under source
+      csi.storage.k8s.io/provisioner-secret-name: smbcreds
+      csi.storage.k8s.io/provisioner-secret-namespace: default
+      csi.storage.k8s.io/node-stage-secret-name: smbcreds
+      csi.storage.k8s.io/node-stage-secret-namespace: default
+    reclaimPolicy: Delete
+    volumeBindingMode: Immediate
+    allowVolumeExpansion: true
+    mountOptions:
+      - dir_mode=0777
+      - file_mode=0777
+      - noperm
+      - mfsymlinks
+      - cache=strict
+      - noserverino  # required to prevent data corruption
+  - name: smb-csi-retain
+    parameters:
+      source: "//smb-server.default.svc.cluster.local/share"
+      # if csi.storage.k8s.io/provisioner-secret is provided, will create a sub directory
+      # with PV name under source
+      csi.storage.k8s.io/provisioner-secret-name: smbcreds
+      csi.storage.k8s.io/provisioner-secret-namespace: default
+      csi.storage.k8s.io/node-stage-secret-name: smbcreds
+      csi.storage.k8s.io/node-stage-secret-namespace: default
+    reclaimPolicy: Retain
+    volumeBindingMode: Immediate
+    allowVolumeExpansion: true
+    mountOptions:
+      - dir_mode=0777
+      - file_mode=0777
+      - noperm
+      - mfsymlinks
+      - cache=strict
+      - noserverino  # required to prevent data corruption
+```
+
+ - install with custom values:
+```console
+helm install csi-driver-smb csi-driver-smb/csi-driver-smb --namespace kube-system -f custom-values.yaml
+```
 
 ## troubleshooting
 
