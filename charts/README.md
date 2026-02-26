@@ -12,11 +12,11 @@
 
 ### install a specific version
 > [!IMPORTANT]  
-> Starting from version `1.18.0`, the prefix `v` is removed from hlem chart release so they are in line with [semver](https://semver.org). Therefore, when upgrading, refer to version `1.18.0` instead of `v1.18.0`.
+> Starting from version `1.18.0`, the prefix `v` is removed from helm chart release so they are in line with [semver](https://semver.org). Therefore, when upgrading, refer to version `1.18.0` instead of `v1.18.0`.
 
 ```console
 helm repo add csi-driver-smb https://raw.githubusercontent.com/kubernetes-csi/csi-driver-smb/master/charts
-helm install csi-driver-smb csi-driver-smb/csi-driver-smb --namespace kube-system --version v1.19.1
+helm install csi-driver-smb csi-driver-smb/csi-driver-smb --namespace kube-system --version 1.19.1
 ```
 
 ### install driver with customized driver name, deployment name
@@ -53,7 +53,7 @@ The following table lists the configurable parameters of the latest SMB CSI Driv
 | `image.smb.repository`                                  | csi-driver-smb docker image                                                                                | `gcr.io/k8s-staging-sig-storage/smbplugin`              |
 | `image.smb.tag`                                         | csi-driver-smb docker image tag                                                                            | `canary`                                                |
 | `image.smb.pullPolicy`                                  | csi-driver-smb image pull policy                                                                           | `IfNotPresent`                                          |
-| `image.csiProvisioner.tag`                              | csi-provisioner docker image tag                                                                           | `v5.3.0`                                                |
+| `image.csiProvisioner.tag`                              | csi-provisioner docker image tag                                                                           | `v6.0.0`                                                |
 | `image.csiProvisioner.pullPolicy`                       | csi-provisioner image pull policy                                                                          | `IfNotPresent`                                          |
 | `image.livenessProbe.repository`                        | liveness-probe docker image                                                                                | `/livenessprobe`                                        |
 | `image.livenessProbe.tag`                               | liveness-probe docker image tag                                                                            | `v2.17.0`                                                |
