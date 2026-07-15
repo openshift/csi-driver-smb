@@ -498,6 +498,12 @@ func newSMBVolume(name string, size int64, params map[string]string, defaultOnDe
 	if err := validateOnDeleteValue(onDelete); err != nil {
 		return nil, err
 	}
+	if err := validatePath(vol.source); err != nil {
+		return nil, fmt.Errorf("invalid source %q: %v", vol.source, err)
+	}
+	if err := validatePath(vol.subDir); err != nil {
+		return nil, fmt.Errorf("invalid subDir %q: %v", vol.subDir, err)
+	}
 
 	vol.onDelete = defaultOnDeletePolicy
 	if onDelete != "" {
@@ -543,13 +549,20 @@ func getSmbVolFromID(id string) (*smbVolume, error) {
 	if !strings.HasPrefix(segments[0], "//") {
 		source = "//" + source
 	}
+	subDir := segments[1]
+	if err := validatePath(subDir); err != nil {
+		return nil, fmt.Errorf("invalid subDir %q: %v", subDir, err)
+	}
 	vol := &smbVolume{
 		id:     id,
 		source: source,
-		subDir: segments[1],
+		subDir: subDir,
 	}
 	if len(segments) >= 3 {
 		vol.uuid = segments[2]
+		if err := validatePath(vol.uuid); err != nil {
+			return nil, fmt.Errorf("invalid uuid %q: %v", vol.uuid, err)
+		}
 	}
 	if len(segments) >= 4 {
 		vol.onDelete = segments[3]
