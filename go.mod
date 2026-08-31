@@ -184,3 +184,5 @@ replace (
 	k8s.io/legacy-cloud-providers => k8s.io/legacy-cloud-providers v0.32.10
 	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.32.10
 )
+
+replace golang.org/x/crypto => github.com/openshift-sustaining/crypto v0.33.0-sec.4
