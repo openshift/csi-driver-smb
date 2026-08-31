@@ -162,4 +162,7 @@ replace (
 	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.28.12
 )
 
-replace golang.org/x/net => github.com/openshift-sustaining/net v0.43.0-sec.4
+replace (
+	golang.org/x/crypto => github.com/openshift-sustaining/crypto v0.41.0-sec.4
+	golang.org/x/net => github.com/openshift-sustaining/net v0.43.0-sec.4
+)
