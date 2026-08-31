@@ -109,7 +109,7 @@ require (
 	go.uber.org/atomic v1.10.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.19.0 // indirect
-	golang.org/x/crypto v0.33.0 // indirect
+	golang.org/x/crypto v0.25.0 // indirect
 	golang.org/x/exp v0.0.0-20230905200255-921286631fa9 // indirect
 	golang.org/x/mod v0.17.0 // indirect
 	golang.org/x/oauth2 v0.20.0 // indirect
@@ -159,4 +159,4 @@ replace (
 	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.28.12
 )
 
-replace golang.org/x/net => github.com/openshift-sustaining/net v0.35.0-sec.4
+replace golang.org/x/crypto => github.com/openshift-sustaining/crypto v0.33.0-sec.5
