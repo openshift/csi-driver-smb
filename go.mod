@@ -18,7 +18,7 @@ require (
 	github.com/pborman/uuid v1.2.1
 	github.com/pelletier/go-toml v1.7.0
 	github.com/stretchr/testify v1.8.4
-	golang.org/x/net v0.25.0
+	golang.org/x/net v1.26.9
 	google.golang.org/grpc v1.59.0
 	k8s.io/api v0.28.6
 	k8s.io/apimachinery v0.28.6
